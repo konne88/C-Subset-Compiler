@@ -1,0 +1,7 @@
+.cproject
+.project
+*.exe
+*.o
+quadComp.l.c
+quadComp.y.c
+quadComp.y.h
