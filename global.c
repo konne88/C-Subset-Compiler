@@ -20,10 +20,9 @@ void writeSymboltable (symtabEntry * Symboltable, FILE * outputFile){
 	int j;							//help variable, to build a string with the same length
 	char helpString[21];			//string for formatted output
 	
-	
 	currentEntry = Symboltable;
 	do{
-	//walks through the Symboltable
+	    //walks through the Symboltable
 		fprintf(outputFile, "%d:\t",currentEntry->number); 
 		
 		 
@@ -59,6 +58,19 @@ void writeSymboltable (symtabEntry * Symboltable, FILE * outputFile){
 	
 }
 
+symtabEntry* lookup(char* id) {
+    symtabEntry* e = theSymboltable;
+    
+    while(e) {
+        if(strcmp(id,e->name) == 0){
+            return e;
+        }
+        e = e->next;
+    }
+    
+    return NULL;
+}
+
 
 void getSymbolTypePrintout(symtabEntryType  type, char * writeIn){
 //puts the printout for a given SymbolEntrytype to the given string
@@ -76,7 +88,7 @@ void getSymbolTypePrintout(symtabEntryType  type, char * writeIn){
 	}
 }
 
-void addSymboltableEntry (symtabEntry * Symboltable,
+symtabEntry* addSymboltableEntry (symtabEntry * Symboltable,
 						  char * name,
 						  symtabEntryType type,
 						  symtabEntryType internType,
@@ -118,14 +130,16 @@ void addSymboltableEntry (symtabEntry * Symboltable,
 		}
 		symtabHelp->next = newSymtabEntry;
 	}
+	
+	return newSymtabEntry;
 }
 	
 
 
-
+/*
 
 int main (void){
-	FILE * outputFile;
+//	FILE * outputFile;
 
 	//sample for a valid symboltable
 	addSymboltableEntry(theSymboltable,"If_Demo"  , PROG,  		NOP, 18, 0, 0, 0, 0, 0 );
@@ -143,10 +157,10 @@ int main (void){
 	addSymboltableEntry(theSymboltable,"H9"       , BOOL,  		NOP, 17, 0, 0, 0, 0, 0 );
 	
 	
-	if((outputFile = fopen ("./Symboltable.out","w")) != 0)
-		writeSymboltable(theSymboltable, outputFile);
-	fclose(outputFile);
+//	if((outputFile = fopen ("./Symboltable.out","w")) != 0)
+		writeSymboltable(theSymboltable, stdout);
+	//fclose(outputFile);
 	
 	return 1;
 }
-
+*/
