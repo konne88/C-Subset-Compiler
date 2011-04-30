@@ -170,6 +170,7 @@ declaration
     : INT id   
     {
         if(lookup($2)) {
+            printf($2);
             yyerror("Integer variable defined twice.");
         }
         addSymboltableEntry(theSymboltable, $2, INTEGER, NOP, rel_addr, 0, 0, 0, 0, 0);

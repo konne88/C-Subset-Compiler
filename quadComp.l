@@ -4,8 +4,8 @@
     #include "y.tab.h"
     
     void print(char *s){
-        printf(s);
-        printf("\n");
+     //   printf(s);
+     //   printf("\n");
     }
 %}
 
@@ -31,7 +31,7 @@ int { print("int"); return INT; }
 
 ([1-9][0-9]*|0)(\.[0-9]+)? { print("const"); return CONSTANT; }
 
-[a-zA-Z_][a-zA-Z_0-9]* { print("id"); return IDENTIFIER; }
+[a-zA-Z_][a-zA-Z_0-9]* { print("id"); strcpy(yylval.str, yytext); return IDENTIFIER; }
 
 \( {print("("); return '('; }
 
