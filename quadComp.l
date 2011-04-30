@@ -1,4 +1,6 @@
 %{
+
+    #include "global.h"
     #include "y.tab.h"
     
     void print(char *s){
