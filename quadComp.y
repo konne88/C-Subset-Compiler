@@ -107,7 +107,6 @@ symtabEntry* print_variable_assignment(symtabEntry* a,symtabEntry* b) {
 
 void print_pass_param(symtabEntry* a) {
     printf("param %s\n",a->name);
-    return a;
 }
 
 symtabEntry* print_function_call(symtabEntry* f, int params){
