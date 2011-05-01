@@ -1,4 +1,4 @@
-This project was created in course of a college class.
+This project was created in order to complete a pass/fail college class exam.
 The code is very ugly, redundant and makes heavy use of 
 strcpy with strings of user controlled sizes.
 
