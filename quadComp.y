@@ -22,12 +22,16 @@ symtabEntry* create_helper_variable(symtabEntryType type) {
 
     ++help_num;
 
-    symtabEntry* entry = addSymboltableEntry(theSymboltable, str, type, NOP, rel_addr, 0, 0, 0, 0, 0);
+    symtabEntry* entry = addSymboltableEntry(theSymboltable, str, type, NOP, rel_addr, 0, 0, 0, current_function, 0);
     ++rel_addr;
     
     return entry;
 }
 
+symtabEntry* variable_lookup(char* id){
+    symtabEntry* e = lookup(id);
+    return (e != NULL && e->vater == current_function) ? e : NULL;
+}
 
 symtabEntry* 
 print_binary_expression (char* op, symtabEntryType type, 
@@ -44,6 +48,40 @@ print_unary_expression (char* op, symtabEntryType type, symtabEntry* a)
     symtabEntry* c = create_helper_variable(type);
     printf("%s := %s %s\n",c->name,op,a->name);
     return c;
+}
+
+symtabEntry* 
+print_binary_cast_expression ( char* op, symtabEntry* a, symtabEntry* b)
+{
+    symtabEntryType type = (a->type == INTEGER && b->type == INTEGER)?INTEGER:REAL;
+    
+    // cast
+    if(type == REAL) {
+        a = print_unary_expression("tofloat",type,a);
+        b = print_unary_expression("tofloat",type,b);
+    }
+    
+    return print_binary_expression(op,type,a,b);
+}
+
+symtabEntry* 
+print_binary_integer_only_expression (char* op, symtabEntry* a, symtabEntry* b)
+{
+    if(a->type != INTEGER || a->type != INTEGER){
+        error("Passing non integer to interger only operation");
+    }
+    return print_binary_expression(op,INTEGER,a,b);
+}
+
+symtabEntry* print_constant_assignment(symtabEntryType type, char* value) {
+    symtabEntry* c = create_helper_variable(type);
+    printf("%s := %s\n",c->name,value);
+    return c;
+}
+
+symtabEntry* print_variable_assignment(symtabEntry* a,symtabEntry* b) {
+    printf("%s := %s\n",a->name,a->name);
+    return a;
 }
 
 %}
@@ -167,31 +205,31 @@ declaration_list
     ;
 
 declaration
-    : INT id   
+    : INT id
     {
-        if(lookup($2)) {
+        if(variable_lookup($2)) {
             printf($2);
             yyerror("Integer variable defined twice.");
         }
-        addSymboltableEntry(theSymboltable, $2, INTEGER, NOP, rel_addr, 0, 0, 0, 0, 0);
+        addSymboltableEntry(theSymboltable, $2, INTEGER, NOP, rel_addr, 0, 0, 0, current_function, 0);
         rel_addr += sizeof(int);
         $$ = INTEGER;
     }
     | FLOAT id 
     {
-        if(lookup($2)) {
+        if(variable_lookup($2)) {
             yyerror("Float variable defined twice.");
         }
-        addSymboltableEntry(theSymboltable, $2, REAL, NOP, rel_addr, 0, 0, 0, 0, 0);
+        addSymboltableEntry(theSymboltable, $2, REAL, NOP, rel_addr, 0, 0, 0, current_function, 0);
         rel_addr += sizeof(float);
         $$ = REAL;
     }
     | declaration ',' id
     {
-        if(lookup($3)) {
+        if(variable_lookup($3)) {
             yyerror("Declarationlist variable defined twice.");
         }
-        addSymboltableEntry(theSymboltable, $3, $1, NOP, rel_addr, 0, 0, 0, 0, 0);
+        addSymboltableEntry(theSymboltable, $3, $1, NOP, rel_addr, 0, 0, 0, current_function, 0);
         rel_addr += sizeof(float);
         $$ = $1
     }
@@ -211,8 +249,6 @@ var_type
     | VOID  {$$ = NOP;}
     | FLOAT {$$ = REAL;}
     ;
-
-
 
 statement_list
     : statement
@@ -245,16 +281,13 @@ assignment
     : expression
     | id '=' expression 
     {
-        printf("%s := %s\n",$1,$3->name);
-        
-        // TODO make sure the type is right
-        
-        if(lookup($1) == NULL){
-            error("Usage of undeclared variable.");
+        symtabEntry* t = variable_lookup($1);
+        if(t == NULL){
+            error("Assignment to undeclared variable.");
         }
+        print_variable_assignment(t,$3);
     }
     ;
-
 
 expression
     : INC_OP expression  
@@ -265,19 +298,19 @@ expression
     {
         $$ = print_unary_expression("--",$2->type,$2);
     }
-    | expression LOG_OR           expression
+    | expression LOG_OR expression
     {    
-        $$ = print_binary_expression("||",INTEGER,$1,$3);
+        $$ = print_binary_integer_only_expression("||",$1,$3);
     }
-    | expression LOG_AND          expression   
+    | expression LOG_AND expression   
     {
-        $$ = print_binary_expression("&&",INTEGER,$1,$3);
+        $$ = print_binary_integer_only_expression("&&",$1,$3);
     }
-    | expression NOT_EQUAL        expression
+    | expression NOT_EQUAL expression
     {    
         $$ = print_binary_expression("!=",INTEGER,$1,$3);
     }
-    | expression EQUAL            expression   
+    | expression EQUAL expression   
     {    
         $$ = print_binary_expression("==",INTEGER,$1,$3);
     }
@@ -285,46 +318,47 @@ expression
     {    
         $$ = print_binary_expression(">=",INTEGER,$1,$3);
     }
-    | expression LESS_OR_EQUAL    expression   
+    | expression LESS_OR_EQUAL expression   
     {    
         $$ = print_binary_expression("<=",INTEGER,$1,$3);
     }
-    | expression '>'              expression
+    | expression '>' expression
     {    
         $$ = print_binary_expression(">",INTEGER,$1,$3);
     }
-    | expression '<'              expression   
+    | expression '<' expression   
     {    
         $$ = print_binary_expression("<",INTEGER,$1,$3);
     }
-    | expression SHIFTLEFT        expression   
+    | expression SHIFTLEFT expression   
     {    
-        $$ = print_binary_expression("<<",INTEGER,$1,$3);
+        $$ = print_binary_integer_only_expression("<<",$1,$3);
     }
-    | expression '+'              expression
+    | expression '+' expression
     {    
-        $$ = print_binary_expression("+",INTEGER,$1,$3);
+        $$ = print_binary_cast_expression("+",$1,$3);
     }
-    | expression '-'              expression   
+    | expression '-' expression   
     {    
-        $$ = print_binary_expression("-",INTEGER,$1,$3);
+        $$ = print_binary_cast_expression("-",$1,$3);
     }
-    | expression '*'              expression   
+    | expression '*' expression   
     {    
-        $$ = print_binary_expression("*",INTEGER,$1,$3);
+        $$ = print_binary_cast_expression("*",$1,$3);
     }
-    | expression '/'              expression   
+    | expression '/' expression   
     {    
-        $$ = print_binary_expression("/",INTEGER,$1,$3);
+        $$ = print_binary_cast_expression("/",$1,$3);
     }
-    | expression '%'              expression   
+    | expression '%' expression   
     {    
-        $$ = print_binary_expression("%",INTEGER,$1,$3);
+        $$ = print_binary_integer_only_expression("%",$1,$3);
     }
     | '!' expression             
     {
         $$ = print_unary_expression("!",INTEGER,$2);
     }
+    
     | '+' expression %prec U_PLUS              
     {
         $$ = $2
@@ -332,11 +366,11 @@ expression
     | '-' expression %prec U_MINUS             
     {
         $$ = print_unary_expression("-",INTEGER,$2);
-    }              
+    }
+         
     | CONSTANT
     {
-        $$ = create_helper_variable(strchr($1,'.')==NULL ? REAL:INTEGER);
-        printf("%s := %s;\n",$$->name,$1);
+        $$ = print_constant_assignment(strchr($1,'.')==NULL ? REAL:INTEGER, $1);
     }
     | '(' expression ')'                       
     {
@@ -350,7 +384,7 @@ expression
     }               
     | id
     {
-        $$ = lookup($1);
+        $$ = variable_lookup($1);
         if($$ == NULL){
             error("Usage of undeclared variable.");
         }

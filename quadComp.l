@@ -29,7 +29,7 @@ float { print("float"); return FLOAT; }
 
 int { print("int"); return INT; }
 
-([1-9][0-9]*|0)(\.[0-9]+)? { print("const"); return CONSTANT; }
+([1-9][0-9]*|0)(\.[0-9]+)? { print("const"); strcpy(yylval.str, yytext); return CONSTANT; }
 
 [a-zA-Z_][a-zA-Z_0-9]* { print("id"); strcpy(yylval.str, yytext); return IDENTIFIER; }
 
