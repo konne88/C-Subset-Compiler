@@ -13,6 +13,23 @@ void yyerror(char * message);
 int rel_addr = 0; // relative (to ebp) addr of current local variable 
 symtabEntry *current_function = NULL;
 
+int get_type_size(symtabEntryType type) {
+    return 4;   // int and real are of the size 4
+}
+
+symtabEntry* declare_function(char* name, symtabEntryType returnType) {
+    if(lookup(name)) {
+        yyerror("Function defined twice.");
+    }
+    return addSymboltableEntry(theSymboltable, name, FUNC, returnType, 0, 0, 0, 0, 0, 0);
+}
+
+symtabEntry* create_variable(symtabEntryType type, char* name) {
+    symtabEntry* entry = addSymboltableEntry(theSymboltable, name, type, NOP, rel_addr, 0, 0, 0, current_function, 0);
+    rel_addr += get_type_size(type);
+    return entry;
+}
+
 symtabEntry* create_helper_variable(symtabEntryType type) {
     static help_num = 0;   // current helper variable number
 
@@ -22,10 +39,7 @@ symtabEntry* create_helper_variable(symtabEntryType type) {
 
     ++help_num;
 
-    symtabEntry* entry = addSymboltableEntry(theSymboltable, str, type, NOP, rel_addr, 0, 0, 0, current_function, 0);
-    ++rel_addr;
-    
-    return entry;
+    return create_variable(type,str);
 }
 
 symtabEntry* variable_lookup(char* id){
@@ -50,6 +64,13 @@ print_unary_expression (char* op, symtabEntryType type, symtabEntry* a)
     return c;
 }
 
+symtabEntry* print_cast(symtabEntry* a, symtabEntryType castTo) {
+    if(a->type != castTo){
+        a = print_unary_expression(castTo==REAL?"tofloat":"toint",castTo,a);
+    }
+    return a;
+}
+
 symtabEntry* 
 print_binary_cast_expression ( char* op, symtabEntry* a, symtabEntry* b)
 {
@@ -57,8 +78,8 @@ print_binary_cast_expression ( char* op, symtabEntry* a, symtabEntry* b)
     
     // cast
     if(type == REAL) {
-        a = print_unary_expression("tofloat",type,a);
-        b = print_unary_expression("tofloat",type,b);
+        a = print_cast(a, REAL);
+        b = print_cast(b, REAL);
     }
     
     return print_binary_expression(op,type,a,b);
@@ -68,7 +89,7 @@ symtabEntry*
 print_binary_integer_only_expression (char* op, symtabEntry* a, symtabEntry* b)
 {
     if(a->type != INTEGER || a->type != INTEGER){
-        error("Passing non integer to interger only operation");
+        yyerror("Passing non integer to interger only operation");
     }
     return print_binary_expression(op,INTEGER,a,b);
 }
@@ -80,11 +101,51 @@ symtabEntry* print_constant_assignment(symtabEntryType type, char* value) {
 }
 
 symtabEntry* print_variable_assignment(symtabEntry* a,symtabEntry* b) {
-    printf("%s := %s\n",a->name,a->name);
+    printf("%s := %s\n",a->name,b->name);
     return a;
 }
 
+void print_pass_param(symtabEntry* a) {
+    printf("param %s\n",a->name);
+    return a;
+}
+
+symtabEntry* print_function_call(symtabEntry* f, int params){
+    if(f->internType == NOP) {
+        printf("call %s, %d\n",f->name,params);
+        return NULL;
+    } else {
+        symtabEntry* r = create_helper_variable(f->internType);
+        printf("%s := call %s, %d\n",r->name,f->name,params);
+        return r;
+    }
+}
+
+void print_conditional_jump(symtabEntry* boolean) {
+    printf("if %s == 0 goto M\n",boolean);
+}
+
+void print_return(symtabEntry* a) {
+    if(a == NULL) {     // void
+        if(current_function->internType != NOP) {
+            yyerror("Returning nothing from non-void function.");
+        }
+        printf("return\n");
+    } else {    // non void
+        if(current_function->internType == NOP) {
+            yyerror("Void function may not return a value.");
+        }
+        a = print_cast(a, current_function->internType);
+
+        printf("return %s\n",a->name);
+    }
+}
+
 %}
+
+// TODO how does a functioncall work? how do i know where to jump?
+// TODO how does receiving function parameters work?
+// TODO how do jumps work?
 
 // left means, build the tree from left to right
 
@@ -153,6 +214,8 @@ symtabEntry* print_variable_assignment(symtabEntry* a,symtabEntry* b) {
 %type <type> declaration
 %type <entry> expression;
 %type <str> CONSTANT;
+%type <entry> assignment;
+%type <integer> exp_list;
 
 %union
 {   // defines yylval
@@ -175,23 +238,25 @@ programm
 function
     : var_type id '(' parameter_list ')' ';'  
     {
-        if(lookup($2)) {
-            yyerror("Function defined twice.");
-        }
-        addSymboltableEntry(theSymboltable, $2, FUNC, $1, 0, 0, 0, 0, 0, 0);
+        declare_function($2,$1);
     }
-    | var_type id '(' parameter_list ')' function_body 
+    
+    | var_type id '(' parameter_list ')' 
     {
+        // check declaration
         current_function = lookup($2);
         if(current_function == NULL){
-            addSymboltableEntry(theSymboltable, $2, FUNC, $1, 0, 0, 0, 0, 0, 0);
+            current_function = declare_function($2,$1);
         } else {
             if($1 != current_function->internType){
                 yyerror("Function's return type differs from declaration.");
             }
         }
-        rel_addr = 0;      // reset stack pointer
+        
+        // reset relative stack pointer
+        rel_addr = 0;      
     }
+    function_body
     ;
 
 function_body
@@ -261,10 +326,11 @@ statement
     ;
 
 matched_statement
-    : IF '(' assignment ')' matched_statement ELSE matched_statement
+    : IF '(' assignment ')'
+    matched_statement ELSE matched_statement
     | assignment ';'                                                
-    | RETURN ';'                                                 
-    | RETURN assignment ';'                                                  
+    | RETURN ';' { print_return(NULL); }                                             
+    | RETURN assignment { print_return($2);}  ';'                 
     | WHILE '(' assignment ')' matched_statement                             
     | DO statement WHILE '(' assignment ')' ';'                              
     | '{' statement_list '}'                                                 
@@ -281,11 +347,11 @@ assignment
     : expression
     | id '=' expression 
     {
-        symtabEntry* t = variable_lookup($1);
-        if(t == NULL){
-            error("Assignment to undeclared variable.");
+        $$ = variable_lookup($1);
+        if($$ == NULL){
+            yyerror("Assignment to undeclared variable.");
         }
-        print_variable_assignment(t,$3);
+        print_variable_assignment($$,$3);
     }
     ;
 
@@ -370,30 +436,32 @@ expression
          
     | CONSTANT
     {
-        $$ = print_constant_assignment(strchr($1,'.')==NULL ? REAL:INTEGER, $1);
+        $$ = print_constant_assignment(strchr($1,'.')==NULL ? INTEGER:REAL, $1);
     }
     | '(' expression ')'                       
     {
         $$ = $2;
     }
-    | id '(' exp_list ')'
-    | id '('  ')' {
-        
-//        $$ = create_helper_variable( ? REAL:INTEGER);
-  //      printf("%s := %s;\n",$$->name,$1);
-    }               
+    | id '(' exp_list ')' {
+        symtabEntry* e = lookup($1);
+        if(e == NULL) {
+            yyerror("Trying to call undecared function");
+        }
+        $$ = print_function_call(e,$3);
+    }
     | id
     {
         $$ = variable_lookup($1);
         if($$ == NULL){
-            error("Usage of undeclared variable.");
+            yyerror("Usage of undeclared variable.");
         }
     }
     ;
 
 exp_list
-    : expression
-    | exp_list ',' expression
+    : {$$ = 0;}
+    | expression    {print_pass_param($1); $$ = 1;}
+    | exp_list ',' expression   {print_pass_param($3); $$ = ++$1}
     ;
 
 id

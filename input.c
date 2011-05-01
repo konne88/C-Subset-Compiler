@@ -14,8 +14,8 @@ int main (void){
 	variable_2 = 2;
 	
 	while (variable_1 <= 10 && 1){
-	//	variable_3 = questionmark (variable_1, variable_2);
-			
+		variable_3 = questionmark (variable_1, variable_2);
+		
 		variable_2 = ++variable_1;
 		variable_2 = variable_2 << 2;
 	}
@@ -30,6 +30,7 @@ int main (void){
 float questionmark (int x, int y){
 
 	float result;
+	int x; int y;   // just for now 
 	
 	do{
 		if (y/x){
