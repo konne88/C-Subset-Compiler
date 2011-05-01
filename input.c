@@ -15,7 +15,6 @@ int main (void){
 	
 	while (variable_1 <= 10 && 1){
 		variable_3 = questionmark (variable_1, variable_2);
-		
 		variable_2 = ++variable_1;
 		variable_2 = variable_2 << 2;
 	}
