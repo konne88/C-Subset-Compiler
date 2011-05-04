@@ -16,16 +16,12 @@ int instructionCounter = 0;
 
 char instructions[10000][1000];
 
-boolResult* createBoolResult() {
-    boolResult* p = malloc(sizeof(boolResult));
-    p->trueLen = 0;    
-    p->falseLen = 0;    
-    return p;
-}
-
-
 int get_type_size(symtabEntryType type) {
     return 4;   // int and real are of the size 4
+}
+
+void patch(int ic) {
+    sprintf(instructions[ic],"%s %d",instructions[ic],instructionCounter);
 }
 
 symtabEntry* declare_function(char* name, symtabEntryType returnType) {
@@ -84,12 +80,40 @@ symtabEntry* create_parameter(symtabEntryType type, char* name, int param) {
     return v;
 }
 
+int
+print_if (symtabEntry* check) 
+{
+    sprintf(instructions[instructionCounter],"if %s == 0 goto",check->name);
+    return instructionCounter++;
+}
+
+int
+print_goto () 
+{
+    sprintf(instructions[instructionCounter],"goto");
+    return instructionCounter++;
+}
+
+void
+print_full_not_if (symtabEntry* check, int target) 
+{
+    sprintf(instructions[instructionCounter++],"if %s != 0 goto %d",check->name,target);
+}
+
+void
+print_full_goto (int target) 
+{
+    sprintf(instructions[instructionCounter++],"goto %d",target);
+}
+
+
 symtabEntry* 
 print_binary_expression (char* op, symtabEntryType type, 
                          symtabEntry* a, symtabEntry* b) 
 {
     symtabEntry* c = create_helper_variable(type);
     sprintf(instructions[instructionCounter++],"%s := %s %s %s",c->name,a->name,op,b->name);
+    
     return c;
 }
 
@@ -248,12 +272,15 @@ void print_return(symtabEntry* a) {
 
 %type <str> id
 %type <type> declaration
-%type <entry> expression;
-%type <str> CONSTANT;
-%type <entry> assignment;
-%type <integer> exp_list;
-%type <integer> parameter_list;
-//%type <createBoolResult>
+%type <entry> expression
+%type <str> CONSTANT
+%type <entry> assignment
+%type <integer> exp_list
+%type <integer> parameter_list
+%type <integer> if_start
+%type <integer> else_start
+%type <integer> while_start
+%type <integer> do_start
 
 %union
 {   // defines yylval
@@ -266,7 +293,6 @@ void print_return(symtabEntry* a) {
 }
 
 %%    // grammar rules
-
 
 programm
     : function                  
@@ -296,11 +322,17 @@ function
     : function_start ';'
     | function_start 
     {
+        current_function->line = instructionCounter;
         // reset relative stack pointer
         // int and float have the same size
         rel_addr = current_function->parameter*sizeof(int);      
     }
     function_body
+    {
+        if(current_function->internType == NOP){
+            print_return(NULL);
+        }
+    }
     ;
 
 function_body
@@ -374,29 +406,83 @@ statement
     | unmatched_statement
     ;
 
-matched_statement
+if_start
     : IF '(' assignment ')'
-    matched_statement ELSE matched_statement
-    | assignment ';'                                                
-    | RETURN ';' 
-    { 
+    {
+        $$ = print_if($3);
+    }
+    ;
+
+else_start
+    : if_start matched_statement ELSE 
+    {
+        $$ = print_goto();
+        // backpatch if
+        patch($1);
+    }
+    ;
+    
+while_start 
+    : WHILE '(' assignment ')'
+    {
+        $$ = print_if($3);
+    }
+    ;
+    
+do_start
+    : DO
+    {
+        $$ = instructionCounter;
+    }
+    ;
+    
+matched_statement
+    : else_start matched_statement 
+    {
+        // backpatch else
+        patch($1);
+    }
+    
+    | assignment ';'                                          
+    | RETURN ';'
+    {
         print_return(NULL); 
     }                                             
-    | RETURN assignment 
+    | RETURN assignment ';'
     { 
         print_return($2);
     }  
-    ';'                 
-    | WHILE '(' assignment ')' matched_statement                             
-    | DO statement WHILE '(' assignment ')' ';'                              
-    | '{' statement_list '}'                                                 
-    | '{''}'                                                                                                                
+    | while_start matched_statement      
+    {
+        print_full_goto($1);
+        // backpatch while
+        patch($1);
+    }
+    | do_start statement WHILE '(' assignment ')' ';' 
+    {
+        print_full_not_if($5,$1);
+    }                      
+    | '{' statement_list '}'     
+    | '{''}'                
     ;
 
 unmatched_statement
-    : IF '(' assignment ')' statement                       
-    | WHILE '(' assignment ')' unmatched_statement          
-    | IF '(' assignment ')' matched_statement ELSE unmatched_statement 
+    : if_start statement 
+    {
+        // backpatch if
+        patch($1);
+    }
+    | else_start unmatched_statement 
+    {
+        // backpatch else
+        patch($1);
+    }
+    | while_start unmatched_statement          
+    {
+        print_full_goto($1);
+        // backpatch while
+        patch($1);
+    }
     ;
 
 assignment
@@ -532,7 +618,7 @@ int main() {
     int i;
     
     for(i=0 ; i<instructionCounter ; ++i){
-        puts(instructions[i]);
+        printf("%3d:  %s\n",i,instructions[i]);
     }
     
     writeSymboltable(theSymboltable, stdout);
