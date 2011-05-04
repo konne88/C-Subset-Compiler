@@ -4,6 +4,13 @@
 typedef enum symtab_EntryType {INTEGER, REAL, BOOL, PROC, NOP, ARR, FUNC, PROG, PRG_PARA}
 	symtabEntryType;
 
+typedef struct {
+    int trueList[1000];
+    int trueLen;
+    int falseList[1000];
+    int falseLen;
+} boolResult;
+
 typedef struct a_symtabEntry{
 	char * name;
 	symtabEntryType type;

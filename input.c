@@ -27,9 +27,7 @@ int main (void){
 }
 
 float questionmark (int x, int y){
-
 	float result;
-	int x; int y;   // just for now 
 	
 	do{
 		if (y/x){

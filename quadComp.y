@@ -12,19 +12,45 @@ void yyerror(char * message);
 
 int rel_addr = 0; // relative (to ebp) addr of current local variable 
 symtabEntry *current_function = NULL;
+int instructionCounter = 0;
+
+char instructions[10000][1000];
+
+boolResult* createBoolResult() {
+    boolResult* p = malloc(sizeof(boolResult));
+    p->trueLen = 0;    
+    p->falseLen = 0;    
+    return p;
+}
+
 
 int get_type_size(symtabEntryType type) {
     return 4;   // int and real are of the size 4
 }
 
 symtabEntry* declare_function(char* name, symtabEntryType returnType) {
-    if(lookup(name)) {
-        yyerror("Function defined twice.");
+    symtabEntry* f = lookup(name);
+    if(f){
+        if(f->internType != returnType) {
+            yyerror("Function defined twice with differing return type.");
+        }
     }
-    return addSymboltableEntry(theSymboltable, name, FUNC, returnType, 0, 0, 0, 0, 0, 0);
+    else {
+        f = addSymboltableEntry(theSymboltable, name, FUNC, returnType, 0, 0, 0, 0, 0, -1);
+    }
+    return f;
+}
+
+symtabEntry* variable_lookup(char* id){
+    symtabEntry* e = lookup(id);
+    return (e != NULL && e->vater == current_function) ? e : NULL;
 }
 
 symtabEntry* create_variable(symtabEntryType type, char* name) {
+    if(variable_lookup(name)) {
+        yyerror("Variable defined twice.");
+    }
+
     symtabEntry* entry = addSymboltableEntry(theSymboltable, name, type, NOP, rel_addr, 0, 0, 0, current_function, 0);
     rel_addr += get_type_size(type);
     return entry;
@@ -42,9 +68,20 @@ symtabEntry* create_helper_variable(symtabEntryType type) {
     return create_variable(type,str);
 }
 
-symtabEntry* variable_lookup(char* id){
-    symtabEntry* e = lookup(id);
-    return (e != NULL && e->vater == current_function) ? e : NULL;
+symtabEntry* create_parameter(symtabEntryType type, char* name, int param) {
+    // we ignore the fact that parameters in declarations may have 
+    // differing or no names.
+
+    symtabEntry* v = variable_lookup(name);
+    if(!v) {
+        v = create_variable(type,name);
+        v->parameter = param;
+    } else {
+        if(v->type != type){
+            yyerror("Function parameters differ in type.");
+        }
+    }
+    return v;
 }
 
 symtabEntry* 
@@ -52,7 +89,7 @@ print_binary_expression (char* op, symtabEntryType type,
                          symtabEntry* a, symtabEntry* b) 
 {
     symtabEntry* c = create_helper_variable(type);
-    printf("%s := %s %s %s\n",c->name,a->name,op,b->name);
+    sprintf(instructions[instructionCounter++],"%s := %s %s %s",c->name,a->name,op,b->name);
     return c;
 }
 
@@ -60,7 +97,7 @@ symtabEntry*
 print_unary_expression (char* op, symtabEntryType type, symtabEntry* a) 
 {
     symtabEntry* c = create_helper_variable(type);
-    printf("%s := %s %s\n",c->name,op,a->name);
+    sprintf(instructions[instructionCounter++],"%s := %s %s",c->name,op,a->name);
     return c;
 }
 
@@ -96,32 +133,32 @@ print_binary_integer_only_expression (char* op, symtabEntry* a, symtabEntry* b)
 
 symtabEntry* print_constant_assignment(symtabEntryType type, char* value) {
     symtabEntry* c = create_helper_variable(type);
-    printf("%s := %s\n",c->name,value);
+    sprintf(instructions[instructionCounter++],"%s := %s",c->name,value);
     return c;
 }
 
 symtabEntry* print_variable_assignment(symtabEntry* a,symtabEntry* b) {
-    printf("%s := %s\n",a->name,b->name);
+    sprintf(instructions[instructionCounter++],"%s := %s",a->name,b->name);
     return a;
 }
 
 void print_pass_param(symtabEntry* a) {
-    printf("param %s\n",a->name);
+    sprintf(instructions[instructionCounter++],"param %s",a->name);
 }
 
 symtabEntry* print_function_call(symtabEntry* f, int params){
     if(f->internType == NOP) {
-        printf("call %s, %d\n",f->name,params);
+        sprintf(instructions[instructionCounter++],"call %s, %d",f->name,params);
         return NULL;
     } else {
         symtabEntry* r = create_helper_variable(f->internType);
-        printf("%s := call %s, %d\n",r->name,f->name,params);
+        sprintf(instructions[instructionCounter++],"%s := call %s, %d",r->name,f->name,params);
         return r;
     }
 }
 
 void print_conditional_jump(symtabEntry* boolean) {
-    printf("if %s == 0 goto M\n",boolean);
+    sprintf(instructions[instructionCounter++],"if %s == 0 goto M",boolean);
 }
 
 void print_return(symtabEntry* a) {
@@ -129,14 +166,14 @@ void print_return(symtabEntry* a) {
         if(current_function->internType != NOP) {
             yyerror("Returning nothing from non-void function.");
         }
-        printf("return\n");
+        sprintf(instructions[instructionCounter++],"return");
     } else {    // non void
         if(current_function->internType == NOP) {
             yyerror("Void function may not return a value.");
         }
         a = print_cast(a, current_function->internType);
 
-        printf("return %s\n",a->name);
+        sprintf(instructions[instructionCounter++],"return %s",a->name);
     }
 }
 
@@ -215,6 +252,8 @@ void print_return(symtabEntry* a) {
 %type <str> CONSTANT;
 %type <entry> assignment;
 %type <integer> exp_list;
+%type <integer> parameter_list;
+//%type <createBoolResult>
 
 %union
 {   // defines yylval
@@ -234,26 +273,32 @@ programm
     | programm function         
     ;
 
-function
-    : var_type id '(' parameter_list ')' ';'  
+function_start 
+    : var_type id 
     {
-        declare_function($2,$1);
+        current_function = declare_function($2,$1);
     }
-    
-    | var_type id '(' parameter_list ')' 
+    '(' parameter_list ')'
     {
-        // check declaration
-        current_function = lookup($2);
-        if(current_function == NULL){
-            current_function = declare_function($2,$1);
+        if(current_function->parameter == -1){ 
+            // first declaration
+            // update parameter amount in symboltable
+            current_function->parameter = $5;
         } else {
-            if($1 != current_function->internType){
-                yyerror("Function's return type differs from declaration.");
+            if(current_function->parameter != $5){
+                yyerror("Function declared again with wrong amount of parameters.");            
             }
         }
-        
+    }
+    ;
+    
+function
+    : function_start ';'
+    | function_start 
+    {
         // reset relative stack pointer
-        rel_addr = 0;      
+        // int and float have the same size
+        rel_addr = current_function->parameter*sizeof(int);      
     }
     function_body
     ;
@@ -271,41 +316,46 @@ declaration_list
 declaration
     : INT id
     {
-        if(variable_lookup($2)) {
-            printf($2);
-            yyerror("Integer variable defined twice.");
-        }
-        addSymboltableEntry(theSymboltable, $2, INTEGER, NOP, rel_addr, 0, 0, 0, current_function, 0);
-        rel_addr += sizeof(int);
+        create_variable(INTEGER,$2);
         $$ = INTEGER;
     }
     | FLOAT id 
     {
-        if(variable_lookup($2)) {
-            yyerror("Float variable defined twice.");
-        }
-        addSymboltableEntry(theSymboltable, $2, REAL, NOP, rel_addr, 0, 0, 0, current_function, 0);
-        rel_addr += sizeof(float);
+        create_variable(REAL,$2);
         $$ = REAL;
     }
     | declaration ',' id
     {
-        if(variable_lookup($3)) {
-            yyerror("Declarationlist variable defined twice.");
-        }
-        addSymboltableEntry(theSymboltable, $3, $1, NOP, rel_addr, 0, 0, 0, current_function, 0);
-        rel_addr += sizeof(float);
+        create_variable($1,$3);
         $$ = $1
     }
     ;
 
 parameter_list
     : INT id
+    {
+        $$ = 1;
+        create_parameter(INTEGER,$2,$$);
+    }
     | FLOAT id
+    {
+        $$ = 1;
+        create_parameter(REAL,$2,$$);
+    }
     | parameter_list ',' INT id
+    {
+        $$ = $1+1;
+        create_parameter(INTEGER,$4,$$);
+    }
     | parameter_list ',' FLOAT id
+    {
+        $$ = $1+1;
+        create_parameter(REAL,$4,$$);
+    }
     | VOID
-    |                          
+    { $$ = 0; }
+    | 
+    { $$ = 0; }                         
     ;
 
 var_type
@@ -328,8 +378,15 @@ matched_statement
     : IF '(' assignment ')'
     matched_statement ELSE matched_statement
     | assignment ';'                                                
-    | RETURN ';' { print_return(NULL); }                                             
-    | RETURN assignment { print_return($2);}  ';'                 
+    | RETURN ';' 
+    { 
+        print_return(NULL); 
+    }                                             
+    | RETURN assignment 
+    { 
+        print_return($2);
+    }  
+    ';'                 
     | WHILE '(' assignment ')' matched_statement                             
     | DO statement WHILE '(' assignment ')' ';'                              
     | '{' statement_list '}'                                                 
@@ -471,6 +528,12 @@ id
 
 int main() {
     yyparse();
+    
+    int i;
+    
+    for(i=0 ; i<instructionCounter ; ++i){
+        puts(instructions[i]);
+    }
     
     writeSymboltable(theSymboltable, stdout);
     
