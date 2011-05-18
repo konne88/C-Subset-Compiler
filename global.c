@@ -10,8 +10,9 @@ symtabEntry * theSymboltable=0;    //pointer as a entry to the Symboltable, whic
 void writeSymboltable (symtabEntry * Symboltable, FILE * outputFile){
 //writes the Symboltable in the outFile formated in a table view 
 
-	fprintf (outputFile, "Symboltabelle\n");
-	fprintf (outputFile, "Nr\tName                    Type    Int_Typ Offset\tLine\tIndex1\tIndex2\tVater\tParameter\n");
+	fprintf (outputFile, "SYMBOLS\n");
+	fprintf (outputFile, "-----------------------------------\n");
+	fprintf (outputFile, "Name                    Type    Int_Typ Offset\tLine\tIndex1\tIndex2\tParent\tParameter\n");
 	fprintf (outputFile, "---------------------------------------------------------------------------------------------\n");
 	
 	
@@ -23,9 +24,7 @@ void writeSymboltable (symtabEntry * Symboltable, FILE * outputFile){
 	currentEntry = Symboltable;
 	do{
 	    //walks through the Symboltable
-		fprintf(outputFile, "%d:\t",currentEntry->number); 
-		
-		 
+
 		strncpy(helpString,currentEntry->name,20);
 		for(j=19;j>=strlen(currentEntry->name);j--){
 		//loop for formating the output to file 
@@ -34,9 +33,13 @@ void writeSymboltable (symtabEntry * Symboltable, FILE * outputFile){
 		helpString[20]=0;
 		fprintf(outputFile, "%s\t",helpString);
 		
-		getSymbolTypePrintout(currentEntry->type,helpString);
-		fprintf(outputFile, "%s",helpString);
-		
+		if(currentEntry->type == FUNC && strcmp(currentEntry->name,"main") == 0){
+			fprintf(outputFile, "Main    ");
+		} else {
+				getSymbolTypePrintout(currentEntry->type,helpString);
+				fprintf(outputFile, "%s",helpString);
+		}
+
 		getSymbolTypePrintout(currentEntry->internType,helpString);
 		fprintf(outputFile, "%s",helpString);
 		
@@ -45,9 +48,9 @@ void writeSymboltable (symtabEntry * Symboltable, FILE * outputFile){
 		fprintf(outputFile, "%d\t\t",currentEntry->index1);
 		fprintf(outputFile, "%d\t\t",currentEntry->index2);
 		if(currentEntry->vater){
-			fprintf(outputFile, "%d\t\t",currentEntry->vater->number);
+			fprintf(outputFile, "%s\t\t",currentEntry->vater->name);
 		}else{
-			fprintf(outputFile, "0\t\t");
+			fprintf(outputFile, "None\t\t");
 		}
 		fprintf(outputFile, "%d\t\t\n",currentEntry->parameter);
 		
@@ -88,6 +91,8 @@ void getSymbolTypePrintout(symtabEntryType  type, char * writeIn){
 	}
 }
 
+int globalNumber = 0;
+
 symtabEntry* addSymboltableEntry (symtabEntry * Symboltable,
 						  char * name,
 						  symtabEntryType type,
@@ -103,6 +108,8 @@ symtabEntry* addSymboltableEntry (symtabEntry * Symboltable,
 	
 	symtabEntry * newSymtabEntry = (symtabEntry*) malloc (sizeof (symtabEntry));
 	
+	newSymtabEntry->number = ++globalNumber;
+
 	//allocates the memory for the new symtabEntry
 	newSymtabEntry->name = (char *) malloc (strlen(name) +1);
 	

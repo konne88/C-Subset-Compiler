@@ -1,0 +1,1 @@
+flex quadComp.l; bison -d -b y quadComp.y; flex quadComp.l; /cygdrive/c/cygwin/bin/gcc.exe global.c lex.yy.c y.tab.c -lfl -lm -o quad.exe; ./quad.exe < input.c > output.out

@@ -1,6 +1,8 @@
 %{
 
-// flex quadComp.l; bison -d -b y quadComp.y; flex quadComp.l; gcc global.c lex.yy.c y.tab.c -lfl -lm -o quad; cat input.c | ./quad
+// Linux:   flex quadComp.l; bison -d -b y quadComp.y; flex quadComp.l; gcc global.c lex.yy.c y.tab.c -lfl -lm -o quad; cat input.c | ./quad
+// Windows: flex quadComp.l; bison -d -b y quadComp.y; flex quadComp.l; /cygdrive/c/cygwin/bin/gcc.exe global.c lex.yy.c y.tab.c -lfl -lm -o quad.exe; ./quad.exe < input.c > output.out
+
 
 #include <stdio.h>
 #include "global.h"
@@ -17,7 +19,7 @@ int instructionCounter = 0;
 char instructions[10000][1000];
 
 int get_type_size(symtabEntryType type) {
-    return 4;   // int and real are of the size 4
+    return type == INTEGER ? 4 : 8;   // int and real are of the size 4
 }
 
 void patch(int ic) {
@@ -57,7 +59,7 @@ symtabEntry* create_helper_variable(symtabEntryType type) {
 
     char* str = malloc(1000);
 
-    sprintf(str,"__H%d",help_num);
+    sprintf(str,"V__H%d",help_num);
 
     ++help_num;
 
@@ -83,7 +85,7 @@ symtabEntry* create_parameter(symtabEntryType type, char* name, int param) {
 int
 print_if (symtabEntry* check) 
 {
-    sprintf(instructions[instructionCounter],"if %s == 0 goto",check->name);
+    sprintf(instructions[instructionCounter],"if (%s = 0) goto",check->name);
     return instructionCounter++;
 }
 
@@ -97,7 +99,9 @@ print_goto ()
 void
 print_full_not_if (symtabEntry* check, int target) 
 {
-    sprintf(instructions[instructionCounter++],"if %s != 0 goto %d",check->name,target);
+    sprintf(instructions[instructionCounter],"if (%s = 0) goto %d",check->name,instructionCounter+2);
+    ++instructionCounter;
+    sprintf(instructions[instructionCounter++],"goto %d",target);
 }
 
 void
@@ -105,7 +109,6 @@ print_full_goto (int target)
 {
     sprintf(instructions[instructionCounter++],"goto %d",target);
 }
-
 
 symtabEntry* 
 print_binary_expression (char* op, symtabEntryType type, 
@@ -166,6 +169,31 @@ symtabEntry* print_variable_assignment(symtabEntry* a,symtabEntry* b) {
     return a;
 }
 
+symtabEntry* 
+print_left_shift(symtabEntry* a,symtabEntry* b){
+	symtabEntry* c = create_helper_variable(INTEGER);
+	symtabEntry* r = create_helper_variable(INTEGER);
+	print_variable_assignment(c,b);
+	print_variable_assignment(r,a);
+	sprintf(instructions[instructionCounter],"if (%s <= 0) goto %d",c->name, instructionCounter+4);
+	sprintf(instructions[instructionCounter+1],"%s := %s * 2",r->name,r->name);
+	sprintf(instructions[instructionCounter+2],"%s := %s - 1",c->name,c->name);
+	sprintf(instructions[instructionCounter+3],"goto %d",instructionCounter);
+	instructionCounter += 4;
+	return r;
+}
+
+symtabEntry* 
+print_logical_if(char* op,symtabEntry* a,symtabEntry* b){
+	symtabEntry* c = create_helper_variable(INTEGER);
+	sprintf(instructions[instructionCounter],"if (%s %s %s) goto %d",a->name, op, b->name, instructionCounter+3);
+	sprintf(instructions[instructionCounter+1],"%s := %s",c->name,"0");
+	sprintf(instructions[instructionCounter+2],"goto %d",instructionCounter+4);
+	sprintf(instructions[instructionCounter+3],"%s := %s",c->name,"1");
+	instructionCounter += 4;
+	return c;
+}
+
 void print_pass_param(symtabEntry* a) {
     sprintf(instructions[instructionCounter++],"param %s",a->name);
 }
@@ -182,7 +210,7 @@ symtabEntry* print_function_call(symtabEntry* f, int params){
 }
 
 void print_conditional_jump(symtabEntry* boolean) {
-    sprintf(instructions[instructionCounter++],"if %s == 0 goto M",boolean);
+    sprintf(instructions[instructionCounter++],"if (%s = 0) goto M",boolean);
 }
 
 void print_return(symtabEntry* a) {
@@ -324,14 +352,15 @@ function
     {
         current_function->line = instructionCounter;
         // reset relative stack pointer
-        // int and float have the same size
-        rel_addr = current_function->parameter*sizeof(int);      
+        // assumption: Only ints are passed to function
+        rel_addr = current_function->parameter*4;      
     }
     function_body
     {
         if(current_function->internType == NOP){
             print_return(NULL);
         }
+        current_function->offset = rel_addr;
     }
     ;
 
@@ -500,47 +529,49 @@ assignment
 expression
     : INC_OP expression  
     {
-        $$ = print_unary_expression("++",$2->type,$2);
+    	symtabEntry* c = print_constant_assignment($2->type, "1");
+        $$ = print_binary_expression("+",$2->type,$2,c);
     }
     | DEC_OP expression
     {
-        $$ = print_unary_expression("--",$2->type,$2);
+    	symtabEntry* c = print_constant_assignment($2->type, "1");
+        $$ = print_binary_expression("-",$2->type,$2,c);
     }
     | expression LOG_OR expression
     {    
-        $$ = print_binary_integer_only_expression("||",$1,$3);
+        $$ = print_binary_integer_only_expression("+",$1,$3);
     }
     | expression LOG_AND expression   
     {
-        $$ = print_binary_integer_only_expression("&&",$1,$3);
+        $$ = print_binary_integer_only_expression("*",$1,$3);
     }
     | expression NOT_EQUAL expression
     {    
-        $$ = print_binary_expression("!=",INTEGER,$1,$3);
+        $$ = print_logical_if("!=",$1,$3);
     }
     | expression EQUAL expression   
     {    
-        $$ = print_binary_expression("==",INTEGER,$1,$3);
+        $$ = print_logical_if("=",$1,$3);
     }
     | expression GREATER_OR_EQUAL expression   
     {    
-        $$ = print_binary_expression(">=",INTEGER,$1,$3);
+        $$ = print_logical_if(">=",$1,$3);
     }
     | expression LESS_OR_EQUAL expression   
     {    
-        $$ = print_binary_expression("<=",INTEGER,$1,$3);
+    	$$ = print_logical_if("<=",$1,$3);
     }
     | expression '>' expression
     {    
-        $$ = print_binary_expression(">",INTEGER,$1,$3);
+        $$ = print_logical_if(">",$1,$3);
     }
     | expression '<' expression   
     {    
-        $$ = print_binary_expression("<",INTEGER,$1,$3);
+        $$ = print_logical_if("<",$1,$3);
     }
     | expression SHIFTLEFT expression   
     {    
-        $$ = print_binary_integer_only_expression("<<",$1,$3);
+        $$ = print_left_shift($1,$3);
     }
     | expression '+' expression
     {    
@@ -564,7 +595,8 @@ expression
     }
     | '!' expression             
     {
-        $$ = print_unary_expression("!",INTEGER,$2);
+    	symtabEntry* c = print_constant_assignment($2->type, "1");
+        $$ = print_binary_expression("-",$2->type,c,$2);
     }
     
     | '+' expression %prec U_PLUS              
@@ -613,15 +645,19 @@ id
 %%
 
 int main() {
+	declare_function("main", INTEGER);
     yyparse();
     
     int i;
     
-    for(i=0 ; i<instructionCounter ; ++i){
-        printf("%3d:  %s\n",i,instructions[i]);
-    }
-    
     writeSymboltable(theSymboltable, stdout);
+    
+    printf("\nCODE\n-----------------------------------\n");
+    
+    
+    for(i=0 ; i<instructionCounter ; ++i){
+        printf("%d\t%s\n",i,instructions[i]);
+    }
     
     return 0;
 }

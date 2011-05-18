@@ -1,0 +1,99 @@
+SYMBOLS
+-----------------------------------
+Name                    Type    Int_Typ Offset	Line	Index1	Index2	Parent	Parameter
+---------------------------------------------------------------------------------------------
+main                	Main    Int     108		0		0		0		None		0		
+questionmark        	Func    Real    48		40		0		0		None		2		
+x                   	Int     None    0		0		0		0		questionmark		1		
+y                   	Int     None    4		0		0		0		questionmark		2		
+variable_1          	Int     None    0		0		0		0		main		0		
+variable_2          	Int     None    4		0		0		0		main		0		
+variable_4          	Int     None    8		0		0		0		main		0		
+variable_3          	Real    None    12		0		0		0		main		0		
+variable_5          	Real    None    20		0		0		0		main		0		
+V__H0               	Int     None    28		0		0		0		main		0		
+V__H1               	Int     None    32		0		0		0		main		0		
+V__H2               	Int     None    36		0		0		0		main		0		
+V__H3               	Int     None    40		0		0		0		main		0		
+V__H4               	Int     None    44		0		0		0		main		0		
+V__H5               	Int     None    48		0		0		0		main		0		
+V__H6               	Int     None    52		0		0		0		main		0		
+V__H7               	Real    None    56		0		0		0		main		0		
+V__H8               	Int     None    64		0		0		0		main		0		
+V__H9               	Int     None    68		0		0		0		main		0		
+V__H10              	Int     None    72		0		0		0		main		0		
+V__H11              	Int     None    76		0		0		0		main		0		
+V__H12              	Int     None    80		0		0		0		main		0		
+V__H13              	Real    None    84		0		0		0		main		0		
+V__H14              	Real    None    92		0		0		0		main		0		
+V__H15              	Int     None    100		0		0		0		main		0		
+V__H16              	Int     None    104		0		0		0		main		0		
+result              	Real    None    8		0		0		0		questionmark		0		
+V__H17              	Int     None    16		0		0		0		questionmark		0		
+V__H18              	Real    None    20		0		0		0		questionmark		0		
+V__H19              	Int     None    28		0		0		0		questionmark		0		
+V__H20              	Int     None    32		0		0		0		questionmark		0		
+V__H21              	Int     None    36		0		0		0		questionmark		0		
+V__H22              	Int     None    40		0		0		0		questionmark		0		
+V__H23              	Int     None    44		0		0		0		questionmark		0		
+
+CODE
+-----------------------------------
+0	V__H0 := 1
+1	variable_1 := V__H0
+2	V__H1 := 2
+3	variable_2 := V__H1
+4	V__H2 := 10
+5	if (variable_1 <= V__H2) goto 8
+6	V__H3 := 0
+7	goto 9
+8	V__H3 := 1
+9	V__H4 := 1
+10	if (variable_1 > V__H4) goto 13
+11	V__H5 := 0
+12	goto 14
+13	V__H5 := 1
+14	V__H6 := V__H3 * V__H5
+15	if (V__H6 = 0) goto 32
+16	param variable_1
+17	param variable_2
+18	V__H7 := call questionmark, 2
+19	variable_3 := V__H7
+20	V__H8 := 1
+21	V__H9 := variable_1 + V__H8
+22	variable_2 := V__H9
+23	V__H10 := 4
+24	V__H11 := V__H10
+25	V__H12 := variable_2
+26	if (V__H11 <= 0) goto 30
+27	V__H12 := V__H12 * 2
+28	V__H11 := V__H11 - 1
+29	goto 26
+30	variable_2 := V__H12
+31	goto 15
+32	V__H13 := 1
+33	V__H14 := V__H13 - variable_3
+34	if (V__H14 = 0) goto 38
+35	V__H15 := 0
+36	return V__H15
+37	goto 40
+38	V__H16 := 1
+39	return V__H16
+40	V__H17 := y / x
+41	if (V__H17 = 0) goto 44
+42	V__H18 := 1.0
+43	result := V__H18
+44	V__H19 := 1
+45	V__H20 := y - V__H19
+46	if (y < x) goto 49
+47	V__H21 := 0
+48	goto 50
+49	V__H21 := 1
+50	if (y = x) goto 53
+51	V__H22 := 0
+52	goto 54
+53	V__H22 := 1
+54	V__H23 := V__H21 + V__H22
+55	if (V__H23 = 0) goto 57
+56	goto 40
+57	return result
